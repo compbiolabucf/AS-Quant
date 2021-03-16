@@ -7,7 +7,7 @@ def SamtoText(input_dir, bamfile_name, chromosomes):
 	output_dir = input_dir+'/'+bamfile_name[:-4]+'/'
 	os.makedirs(output_dir, exist_ok=True)
 
-	cmd1 = "/home/naima/codes/AS-Quant/AS_Quant_v2/samtools index "+input_dir+"/"+bamfile_name		## make samtools index filename.bam.bai
+	cmd1 = "samtools index "+input_dir+"/"+bamfile_name		## make samtools index filename.bam.bai
 	os.system(cmd1)
 	print("Samtools index run completed.")
 
