@@ -220,10 +220,10 @@ print(s1_namelist, s2_namelist)
 
 if species =='human':
 	chromosomes = chromosomes_h
-	inp = 'homo_sapiens/'
+	inp = 'hg19/'
 elif species == 'mouse':
 	chromosomes = chromosomes_m
-	inp = 'mus_musculus/'
+	inp = 'mm10/'
 
 ann_file_reader= open(inp+'annotation.csv', "rt")
 ann_read = csv.reader(ann_file_reader, delimiter="\t")
@@ -232,11 +232,5 @@ ann_list = list(ann_read)
 Take_user_inputs(samplenames, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, ann_list)
 totalTime = time.time() - startTime
 print("Total program time is : ",totalTime)
-
-
-# make_plots.py -s mouse -o mm10_12.02 /home/naima/input/mm10_TSC1_null_control_vs_siU2AF1/TSC1_null_control /home/naima/input/mm10_TSC1_null_control_vs_siU2AF1/TSC1_null_siU2af1
-
-# chr19:Ganab:8907850-8907916
-# chr10:Ptbp1:79860116-79860194
 
 
