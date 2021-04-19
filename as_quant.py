@@ -72,7 +72,6 @@ elif species == 'mouse':
 	species_folder = 'mm10/'
 
 print("Generating read coverage files for each chromosome...")
-"""
 current = os.getcwd()
 os.chdir(input1_dir)
 for file1 in glob.glob("*.bam"):
@@ -81,7 +80,7 @@ os.chdir(input2_dir)
 for file2 in glob.glob("*.bam"):
     preprocess.SamtoText(input2_dir, file2, chromosomes)
 os.chdir(current)
-"""
+
 
 s1_namelist = list_dirs(input1_dir)
 s2_namelist = list_dirs(input2_dir)
@@ -126,8 +125,10 @@ else:
 writer_out = pd.ExcelWriter(output_dir+g1_name+"_Vs_"+g2_name+".xlsx", engine='xlsxwriter')
 for AS in target_AS:
 	if method.lower() == 'ranksum':
-		count_pvalue.Count_pvalue_replicates(AS, output_dir, s1_namelist, s2_namelist, g1_name, g2_name)
+		print("Detecting significant events using Wilcoxon rank-sum method...")
+		count_pvalue.Count_pvalue_ranksum(AS, output_dir, s1_namelist, s2_namelist, g1_name, g2_name)
 	elif method.lower() == 'chisquare':
+		print("Detecting significant events using Chi-squared method...")
 		count_pvalue.Count_pvalue(AS, output_dir, s1_namelist, s2_namelist, g1_name, g2_name)
 	print(AS, "counting p-val Complete")
 

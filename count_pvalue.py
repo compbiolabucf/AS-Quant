@@ -8,7 +8,7 @@ import os
 import xlsxwriter
 import numpy as np
 
-def Count_pvalue_replicates(AS, output_dir, s1_namelist, s2_namelist, g1_name, g2_name):
+def Count_pvalue_ranksum(AS, output_dir, s1_namelist, s2_namelist, g1_name, g2_name):
 	len_S1 = len(s1_namelist)
 	len_S2 = len(s2_namelist)
 
@@ -55,17 +55,15 @@ def Count_pvalue_replicates(AS, output_dir, s1_namelist, s2_namelist, g1_name, g
 
 			if sum(np.array(X))!=0 and sum(np.array(Y))!=0:
 				stat, p_val = ranksums(X, Y)
-				print(X, Y, p_val)
 				chrom_region_long = chrom+':'+gene+":"+start+"-"+end
 				writer.writerow([chrom, gene, start, end, p_val, chrom_region_long])
 			
 		f.close()
-	"""
+	
 	for sample1 in s1_namelist:
 		os.remove(output_dir+sample1+"_"+AS+".csv")
 	for sample2 in s2_namelist:
 		os.remove(output_dir+sample2+"_"+AS+".csv")
-	"""
 
 	return
 
