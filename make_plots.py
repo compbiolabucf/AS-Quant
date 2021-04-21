@@ -172,7 +172,8 @@ def Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist
 		if i == 0:
 			ax1.set_title(title, color = "black", fontsize = 20)
 	for i, ax2 in enumerate(axes[len(s1_namelist):number_of_subplots-1]):
-		y_limit = Generate_read_coverate_plot(ax2, input2_dir, s2_namelist[i], chrom, geneID, int(start), int(end), startAll, endAll, g2_name, 2)
+		j =  - len(s1_namelist)
+		y_limit = Generate_read_coverate_plot(ax2, input2_dir, s2_namelist[j], chrom, geneID, int(start), int(end), startAll, endAll, g2_name, 2)
 
 	print("Generating annotation plots...")
 	ax3 = axes[number_of_subplots-1]
