@@ -70,17 +70,15 @@ elif species == 'mm10':
 	chromosomes = chromosomes_m
 species_folder = species+"/"
 
-
 print("Generating read coverage files for each chromosome...")
 current = os.getcwd()
 os.chdir(input1_dir)
 for file1 in glob.glob("*.bam"):
-    preprocess.SamtoText(input1_dir, file1, chromosomes)
+    preprocess.SamtoText(input1_dir, current, file1, chromosomes)
 os.chdir(input2_dir)
 for file2 in glob.glob("*.bam"):
-    preprocess.SamtoText(input2_dir, file2, chromosomes)
+    preprocess.SamtoText(input2_dir, current, file2, chromosomes)
 os.chdir(current)
-
 
 s1_namelist = list_dirs(input1_dir)
 s2_namelist = list_dirs(input2_dir)
