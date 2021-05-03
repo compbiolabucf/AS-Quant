@@ -20,7 +20,7 @@ chromosomes_m = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9',
 target_AS = ['SE', 'RI', 'MXE', 'A3SS', 'A5SS']
 
 if(len(sys.argv)<6):
-	print("Please provide all mandatory arguments. Example: $ python3 as_quant.py -s human -i dir1 dir2")
+	print("Please provide all mandatory arguments. Example: $ python3 as_quant.py -s hg38 -i dir1 dir2")
 	sys.exit()
 
 for ii in range(len(sys.argv)):
@@ -64,12 +64,12 @@ if method == 'ranksum':
 g1_name = input1_dir.split("/")[-1]
 g2_name = input2_dir.split("/")[-1]
 
-if species =='human':
+if species == 'hg38' or species == 'hg19':
 	chromosomes = chromosomes_h
-	species_folder = 'hg19/'
-elif species == 'mouse':
+elif species == 'mm10':
 	chromosomes = chromosomes_m
-	species_folder = 'mm10/'
+species_folder = species+"/"
+
 
 print("Generating read coverage files for each chromosome...")
 current = os.getcwd()
