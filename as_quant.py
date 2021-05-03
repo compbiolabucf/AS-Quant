@@ -105,10 +105,10 @@ if novel.upper() == 'YES':
 	for AS in target_AS:
 		for sample in s1_namelist:
 			print("Executing: ",sample, "in group 1")
-			methods.Generate_Novel(ChromDict, ChromDict_exon, chromosomes[0:5], AS, input1_dir, species_folder, sample, output_dir)
+			methods.Generate_Novel(ChromDict, ChromDict_exon, chromosomes, AS, input1_dir, species_folder, sample, output_dir)
 		for sample in s2_namelist:
 			print("Executing: ",sample, "in group 2")
-			methods.Generate_Novel(ChromDict, ChromDict_exon, chromosomes[0:5], AS, input2_dir, species_folder, sample, output_dir)
+			methods.Generate_Novel(ChromDict, ChromDict_exon, chromosomes, AS, input2_dir, species_folder, sample, output_dir)
 			
 else:
 	print("Running AS-Quant for detecting significant annotated splicing events...")
