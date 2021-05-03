@@ -3,7 +3,6 @@ import time
 
 
 def SamtoText(input_dir, bamfile_name, chromosomes):
-	#print("###########################")
 	output_dir = input_dir+'/'+bamfile_name[:-4]+'/'
 	os.makedirs(output_dir, exist_ok=True)
 
@@ -14,8 +13,8 @@ def SamtoText(input_dir, bamfile_name, chromosomes):
 	for chrom in chromosomes:
 		print("Start of ", chrom)
 		tt = time.time()
-		cmd2 = "/home/naima/codes/AS-Quant/AS_Quant_v2/samtools view -b "+input_dir+"/"+bamfile_name+" "+chrom+" -o "+output_dir+"/"+chrom+".bam"
-		cmd3 = "/home/naima/codes/AS-Quant/AS_Quant_v2/samtools pileup "+output_dir+"/"+chrom+".bam | cut -f 1,2,4 > "+output_dir+"/"+chrom+".txt"    ### Need to use pileup, not mpileup
+		cmd2 = "./samtools view -b "+input_dir+"/"+bamfile_name+" "+chrom+" -o "+output_dir+"/"+chrom+".bam"
+		cmd3 = "./samtools pileup "+output_dir+"/"+chrom+".bam | cut -f 1,2,4 > "+output_dir+"/"+chrom+".txt"    ### Need to use pileup, not mpileup
 		command = cmd2+";"+cmd3
 		os.system(command)
 		print("Samtools Time: ", time.time()-tt)
