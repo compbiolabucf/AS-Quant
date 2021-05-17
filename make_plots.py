@@ -14,7 +14,7 @@ import os, glob
 import configparser
 import xlsxwriter
 from matplotlib import rcParams
-plt.rc('legend',**{'fontsize':14})
+plt.rc('legend',**{'fontsize':8})
 
 rcParams.update({
     'font.family':'arial',
@@ -71,8 +71,10 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, start, end, s
 		y_limit = m
 
 	if number == 1:
+		#caption = ax.fill_between(p,c, color="midnightblue", alpha=0.9)
 		caption = ax.fill_between(p,c, color="midnightblue", alpha=0.9, label = group_name)
 	else:
+		#caption = ax.fill_between(p,c, color="crimson", alpha=0.9)
 		caption = ax.fill_between(p,c, color="crimson", alpha=0.9, label = group_name)
 
 	ax.legend(handles = [caption])
@@ -82,7 +84,7 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, start, end, s
 	ax.set_xlim(startAll, endAll)
 	ax.autoscale(enable = True)
 	ax.set_xticklabels([])
-	ax.tick_params(axis='both', bottom=False, which='major', labelsize=10)
+	ax.tick_params(axis='both', bottom=False, which='major', labelsize=8)
 
 	return y_limit
 
@@ -170,16 +172,16 @@ def Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist
 	for i, ax1 in enumerate(axes[0:len(s1_namelist)]):
 		y_limit = Generate_read_coverate_plot(ax1, input1_dir, s1_namelist[i], chrom, geneID, int(start), int(end), startAll, endAll, g1_name, 1)
 		if i == 0:
-			ax1.set_title(title, color = "black", fontsize = 20)
+			ax1.set_title(title, color = "black", fontsize = 14)
 	for i, ax2 in enumerate(axes[len(s1_namelist):number_of_subplots-1]):
-		j =  - len(s1_namelist)
+		j = i - len(s1_namelist)
 		y_limit = Generate_read_coverate_plot(ax2, input2_dir, s2_namelist[j], chrom, geneID, int(start), int(end), startAll, endAll, g2_name, 2)
 
 	print("Generating annotation plots...")
 	ax3 = axes[number_of_subplots-1]
 	Generate_annotation_plot(ax3, isoforms, exonCountList, exonStartList, exonEndList, int(start), int(end), startAll, endAll)
-	ax3.set_ylabel('Annotation', fontsize = 16)		
-	ax3.set_xlabel('Position', fontsize = 16)
+	ax3.set_ylabel('Annotation', fontsize = 12)		
+	ax3.set_xlabel('Position', fontsize = 12)
 	ax3.spines['top'].set_color('none')
 	ax3.spines['bottom'].set_color('none')
 	ax3.spines['left'].set_color('none')
@@ -243,8 +245,12 @@ ann_file_reader= open(species_folder+'annotation.csv', "rt")
 ann_read = csv.reader(ann_file_reader, delimiter="\t")
 ann_list = list(ann_read)
 
-region = input("Enter the range: (chr:gene:start-end): ")
+#region = input("Enter the range: (chr:gene:start-end): ")
+region = "chr11:ACOX1:116183463-116183624"
 Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, ann_list)
 totalTime = time.time() - startTime
 print("Time elapsed : ",totalTime)
+
+
+# python3 as_quant.py -s mouse -i /home/naima/input/mouse_M-_M+/RNA-seq_bam/Minus_M /home/naima/input/mouse_M-_M+/RNA-seq_bam/Plus_M
 
