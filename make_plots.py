@@ -190,6 +190,7 @@ def Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist
 
 	plt.savefig(output_dir+title+'.png')
 	plt.savefig(output_dir+title+'.eps', format = 'eps', dpi = 100)
+	plt.savefig(output_dir+title+'.pdf', format = 'pdf')
 	print(title+" Plotted successfully.")
 	y_limit = 0
 
