@@ -6,14 +6,11 @@ import numpy as np
 import pandas as pd
 import bisect
 from bisect import bisect_left
-import csv
-import methods
-import time
-import sys
-import os, glob
-import configparser
+import csv, sys, os, glob
 import xlsxwriter
 from matplotlib import rcParams
+import methods
+
 plt.rc('legend',**{'fontsize':8})
 
 rcParams.update({
@@ -29,10 +26,9 @@ def list_dirs(path):
     return [os.path.basename(x) for x in filter(os.path.isdir, glob.glob(os.path.join(path, '*')))]
 
 def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, start, end, startAll, endAll, group_name, number):
-	bam_file_reader= open(pathin+'/'+sample+'/'+chrom+".txt", "rt")
-	bam_read = csv.reader(bam_file_reader, delimiter="\t")
-	bam_list = list(bam_read)
-	position_row = [int(bam_list[i][1]) for i in range(len(bam_list))]
+	bam_df = pd.read_csv(os.path.join(pathin, sample, chrom+".txt"), delimiter='\t')
+	position_row = bam_df.iloc[:, 0].tolist()
+	bam_list = bam_df.values.tolist()
 
 	ax = ax or plt.gca()
 	x_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
@@ -41,7 +37,7 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, start, end, s
 
 	pos1 = bi_contains(position_row, startAll)
 	pos2 = bi_contains(position_row, endAll)
-	if(int(bam_list[pos2][1]) != endAll):
+	if(int(bam_list[pos2][0]) != endAll):
 		pos2 = pos2 - 1
 
 	p = []
@@ -54,8 +50,8 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, start, end, s
 		c.append(0)
 		
 	for t in range(pos1, pos2+1):
-		position = int(bam_list[t][1])
-		read = int(bam_list[t][2])
+		position = int(bam_list[t][0])
+		read = int(bam_list[t][1])
 		index = p.index(position)
 		c[index] = read
 
@@ -71,10 +67,8 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, start, end, s
 		y_limit = m
 
 	if number == 1:
-		#caption = ax.fill_between(p,c, color="midnightblue", alpha=0.9)
 		caption = ax.fill_between(p,c, color="midnightblue", alpha=0.9, label = group_name)
 	else:
-		#caption = ax.fill_between(p,c, color="crimson", alpha=0.9)
 		caption = ax.fill_between(p,c, color="crimson", alpha=0.9, label = group_name)
 
 	ax.legend(handles = [caption])
@@ -89,12 +83,11 @@ def Generate_read_coverate_plot(ax, pathin, sample, chrom, geneID, start, end, s
 	return y_limit
 
 def Generate_annotation_plot(ax, isoforms, exonCountList, exonStartList, exonEndList, start, end, startAll, endAll):
-	#print(startAll, endAll)
 	ax = ax or plt.gca()
 	x_formatter = matplotlib.ticker.ScalarFormatter(useOffset=False)
 	x_formatter.set_scientific(False)
 	ax.xaxis.set_major_formatter(x_formatter)
-	print("isoforms are: ",isoforms)
+	print("Total number of isoforms are: ",isoforms)
 
 	ystart = 0
 	height = 3
@@ -137,38 +130,41 @@ def Generate_annotation_plot(ax, isoforms, exonCountList, exonStartList, exonEnd
 
 	return
 
-def Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, ann_list):
+def Process_user_inputs(region, ChromDict_merged, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, ann_df):
 	chrom, geneID, rng = region.split(':')
 	start, end = rng.split('-')
-	ChromDict = methods.MakeFullDictionary(ann_list, chromosomes)
-	GeneDict = ChromDict[chrom]
-	exList = GeneDict[geneID]
 
-	mergedExList = methods.MergeIntervals(exList)
-	startAll = int(exList[0].st)
-	endAll = int(exList[-1].en)
+	GeneDict_merged = ChromDict_merged[chrom]
+	exList = GeneDict_merged[geneID.strip().upper()]
 
-	df = pd.DataFrame(ann_list)
-	ann_tt = df.loc[(df[1].str.upper()==geneID) & (df[2]==chrom)]
+	e_starts, e_ends = [], []
+	for (e_st, e_en) in exList:
+		e_starts.append(e_st)
+		e_ends.append(e_en)
 
+	startAll, endAll = min(e_starts), max(e_ends)
+
+	gene_rows = ann_df.loc[(ann_df['gene'].str.upper()==geneID.strip().upper()) & (ann_df['chrom']==chrom)]
 	exonStartList = {}
 	exonEndList = {}
 	exonCountList = {}
 
 	isoforms = 0
-	for a_row in ann_tt.itertuples():
-		exonCount = int(a_row[9])
+	for index, row in gene_rows.iterrows():
+		exonCount = row['exonCount']
 		exonCountList[isoforms] = exonCount
-		exonStartList[isoforms] = a_row[10].split(',')
-		exonEndList[isoforms] = a_row[11].split(',')
-		isoforms+=1
+		exonStarts = list(filter(None, row['exonStarts'].split(',')))
+		exonEnds = list(filter(None, row['exonEnds'].split(',')))
+		exonStartList[isoforms] = exonStarts
+		exonEndList[isoforms] = exonEnds
+		isoforms += 1
 
 	title = ""+chrom+":"+start+"-"+end+"("+geneID+")"
 	print("Number of isoforms found for gene "+geneID+": "+str(isoforms))
 	number_of_subplots = len(s1_namelist)+len(s2_namelist)+1
 	fig, axes = plt.subplots(nrows=number_of_subplots, ncols=1)
 
-	print("Generating read coverage plots...")
+	print("Generating read coverage plots ...")
 	for i, ax1 in enumerate(axes[0:len(s1_namelist)]):
 		y_limit = Generate_read_coverate_plot(ax1, input1_dir, s1_namelist[i], chrom, geneID, int(start), int(end), startAll, endAll, g1_name, 1)
 		if i == 0:
@@ -177,21 +173,19 @@ def Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist
 		j = i - len(s1_namelist)
 		y_limit = Generate_read_coverate_plot(ax2, input2_dir, s2_namelist[j], chrom, geneID, int(start), int(end), startAll, endAll, g2_name, 2)
 
-	print("Generating annotation plots...")
+	print("Generating annotation plots ...")
 	ax3 = axes[number_of_subplots-1]
 	Generate_annotation_plot(ax3, isoforms, exonCountList, exonStartList, exonEndList, int(start), int(end), startAll, endAll)
 	ax3.set_ylabel('Annotation', fontsize = 12)		
 	ax3.set_xlabel('Position', fontsize = 12)
 	ax3.spines['top'].set_color('none')
-	ax3.spines['bottom'].set_color('none')
 	ax3.spines['left'].set_color('none')
 	ax3.spines['right'].set_color('none')
-	ax3.tick_params(labelcolor='w', top=False, bottom=False, left=False, right=False)
+	ax3.tick_params(labelcolor='w', top=False, left=False, right=False)
 
-	plt.savefig(output_dir+title+'.png')
-	plt.savefig(output_dir+title+'.eps', format = 'eps', dpi = 100)
-	plt.savefig(output_dir+title+'.pdf', format = 'pdf')
-	print(title+" Plotted successfully.")
+	plt.savefig(os.path.join(output_dir, title+'.png'))
+	plt.savefig(os.path.join(output_dir, title+'.eps'), format = 'eps', dpi = 100)
+	print(title+" plotted successfully.")
 	y_limit = 0
 
 
@@ -199,13 +193,12 @@ def Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist
 def list_dirs(path):
     return [os.path.basename(x) for x in filter(os.path.isdir, glob.glob(os.path.join(path, '*')))]
 
-startTime = time.time()
 chromosomes_h = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9','chr10','chr11','chr12','chr13','chr14','chr15','chr16','chr17','chr18','chr19','chr20','chr21', 'chr22','chrX','chrY']
 chromosomes_m = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9','chr10','chr11','chr12','chr13','chr14','chr15','chr16','chr17','chr18','chr19','chrX','chrY']
 target_AS = ['SE', 'RI', 'MXE', 'A3SS', 'A5SS']
 
 if(len(sys.argv)<6):
-	print("Please provide all mandatory arguments. Example: $ python3 as_quant.py -s mouse -i dir1 dir2")
+	print("Please provide all mandatory arguments. Example: $ python3 make_plots.py -s mm10 -i dir1 dir2")
 	sys.exit()
 
 for ii in range(len(sys.argv)):
@@ -219,9 +212,6 @@ for ii in range(len(sys.argv)):
 
 if "-o" not in sys.argv and "-O" not in sys.argv:
 	output_dir = 'Output/'
-
-if output_dir[-1] != "/":
-	output_dir += "/"
 os.makedirs(output_dir, exist_ok=True)
 
 if input1_dir[-1] == "/":
@@ -229,29 +219,27 @@ if input1_dir[-1] == "/":
 if input2_dir[-1] == "/":
 	input2_dir = input2_dir[:-1]
 
-g1_name = input1_dir.split("/")[-1]
-g2_name = input2_dir.split("/")[-1]
+g1_name, g2_name = os.path.basename(input1_dir), os.path.basename(input2_dir)
 
-if species =='human':
+if species == 'hg38' or species == 'hg19':
 	chromosomes = chromosomes_h
-	species_folder = 'hg19/'
-elif species == 'mouse':
+elif species == 'mm10':
 	chromosomes = chromosomes_m
-	species_folder = 'mm10/'
 
-s1_namelist = list_dirs(input1_dir)
-s2_namelist = list_dirs(input2_dir)
+s1_namelist, s2_namelist = list_dirs(input1_dir), list_dirs(input2_dir)
 
-ann_file_reader= open(species_folder+'annotation.csv', "rt")
-ann_read = csv.reader(ann_file_reader, delimiter="\t")
-ann_list = list(ann_read)
+ann_df = pd.read_csv(os.path.join(species, 'annotation.csv'), delimiter="\t")
+print("Collecting annotation and input data for AS-Quant run ...")
+#### convert the whole annotation into a dictionary for faster use
+ChromDict = methods.MakeFullDictionary(ann_df, chromosomes)
+#### merge the exons intervals #####
+ChromDict_merged = methods.merge_ChromDict(ChromDict, chromosomes)
 
-#region = input("Enter the range: (chr:gene:start-end): ")
-region = "chr11:ACOX1:116183463-116183624"
-Process_user_inputs(region, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, ann_list)
-totalTime = time.time() - startTime
-print("Time elapsed : ",totalTime)
-
-
-# python3 as_quant.py -s mouse -i /home/naima/input/mouse_M-_M+/RNA-seq_bam/Minus_M /home/naima/input/mouse_M-_M+/RNA-seq_bam/Plus_M
-
+while True:
+    region = input("Enter the range: (chr:gene:start-end): ")
+    if region.lower() == 'exit':
+        print('Exiting from AS-Quant plots generation.')
+        break
+    Process_user_inputs(region, ChromDict_merged, input1_dir, input2_dir, s1_namelist, s2_namelist, g1_name, g2_name, output_dir, ann_df)
+    # 👇 Exit when user put 'exit' and presses Enter
+    

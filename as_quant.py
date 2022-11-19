@@ -20,7 +20,7 @@ chromosomes_m = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9',
 target_AS = ['SE', 'RI', 'MXE', 'A3SS', 'A5SS']
 
 if(len(sys.argv)<6):
-	print("Please provide all mandatory arguments. Example: $ python3 as_quant.py -s hg38 -i dir1 dir2")
+	print("Please provide all mandatory arguments. \nFormat: $ python3 as_quant.py -s hg38 -i dir1 dir2")
 	sys.exit()
 
 for ii in range(len(sys.argv)):
@@ -37,8 +37,6 @@ for ii in range(len(sys.argv)):
 if "-o" not in sys.argv and "-O" not in sys.argv:
 	output_dir = 'Output/'
 
-if output_dir[-1] != "/":
-	output_dir += "/"
 os.makedirs(output_dir, exist_ok=True)
 
 if input1_dir[-1] == "/":
@@ -46,11 +44,7 @@ if input1_dir[-1] == "/":
 if input2_dir[-1] == "/":
 	input2_dir = input2_dir[:-1]
 
-if '-novel' in sys.argv:
-	novel = 'yes'
-else:
-	novel = 'no'
-
+novel = 'yes' if '-novel' in sys.argv else 'no'
 if '-method' not in sys.argv:
 	method = 'chisquare'
 
@@ -61,14 +55,15 @@ if method == 'ranksum':
 		print("Please provide multiple samples/replicates in each group to run ranksum test, otherwise select chisquare.")
 		sys.exit()
 
-g1_name = input1_dir.split("/")[-1]
-g2_name = input2_dir.split("/")[-1]
+g1_name, g2_name = os.path.basename(input1_dir), os.path.basename(input2_dir)
 
 if species == 'hg38' or species == 'hg19':
 	chromosomes = chromosomes_h
 elif species == 'mm10':
 	chromosomes = chromosomes_m
-species_folder = species+"/"
+else:
+	print("Species not found. Please select among hg38, hg19 or mm10")
+	sys.exit()
 
 print("Generating read coverage files for each chromosome...")
 current = os.getcwd()
@@ -80,33 +75,27 @@ for file2 in glob.glob("*.bam"):
     preprocess.SamtoText(input2_dir, current, file2, chromosomes)
 os.chdir(current)
 
-s1_namelist = list_dirs(input1_dir)
-s2_namelist = list_dirs(input2_dir)
+#### load samples lists and annotation
+s1_namelist, s2_namelist = list_dirs(input1_dir), list_dirs(input2_dir)
+ann_df = pd.read_csv(os.path.join(species, 'annotation.csv'), delimiter='\t', index_col=0)
 
-ann_file_reader= open(species_folder+'annotation.csv', "rt")
-ann_read = csv.reader(ann_file_reader, delimiter="\t")
-ann_list = list(ann_read)
+#### convert the whole annotation into a dictionary for faster use
+ChromDict = methods.MakeFullDictionary(ann_df, chromosomes)
 
-ChromDict = methods.MakeFullDictionary(ann_list, chromosomes)
-for chrom in ChromDict.keys():
-	geneDict = ChromDict[chrom]
-	for gene in geneDict.keys():
-		exonList = geneDict[gene]
-		mergedExonList = methods.MergeIntervals(exonList)
-		geneDict[gene] = mergedExonList
-	ChromDict[chrom] = geneDict
+#### merge the exons intervals #####
+ChromDict_merged = methods.merge_ChromDict(ChromDict, chromosomes)
+
 
 if novel.upper() == 'YES':
 	print("Running AS-Quant for detecting significant novel (unannotated) splicing events...")
 	target_AS = ['All']
-	ChromDict_exon = methods.MakeFullDictionary(ann_list, chromosomes)
 	for AS in target_AS:
 		for sample in s1_namelist:
 			print("Executing: ",sample, "in group 1")
-			methods.Generate_Novel(ChromDict, ChromDict_exon, chromosomes, AS, input1_dir, species_folder, sample, output_dir)
+			methods.Find_Novel_splicing_events(ChromDict_merged, ChromDict, chromosomes, AS, input1_dir, species, sample, output_dir)
 		for sample in s2_namelist:
 			print("Executing: ",sample, "in group 2")
-			methods.Generate_Novel(ChromDict, ChromDict_exon, chromosomes, AS, input2_dir, species_folder, sample, output_dir)
+			methods.Find_Novel_splicing_events(ChromDict_merged, ChromDict, chromosomes, AS, input2_dir, species, sample, output_dir)
 			
 else:
 	print("Running AS-Quant for detecting significant annotated splicing events...")
@@ -114,27 +103,27 @@ else:
 		print("Spliced Exon type: ",AS)
 		for sample in s1_namelist:
 			print("Executing: ",sample, "in group 1")
-			methods.Generate(ChromDict, chromosomes, AS, input1_dir, species_folder, sample, output_dir)
+			methods.Find_splicing_events(ChromDict_merged, chromosomes, AS, input1_dir, species, sample, output_dir)
 
 		for sample in s2_namelist:
 			print("Executing: ",sample, "in group 2")
-			methods.Generate(ChromDict, chromosomes, AS, input2_dir, species_folder, sample, output_dir)
+			methods.Find_splicing_events(ChromDict_merged, chromosomes, AS, input2_dir, species, sample, output_dir)
 
-writer_out = pd.ExcelWriter(output_dir+g1_name+"_Vs_"+g2_name+".xlsx", engine='xlsxwriter')
+writer_out = pd.ExcelWriter(os.path.join(output_dir, "asquant_"+g1_name+"_Vs_"+g2_name+".xlsx"), engine='xlsxwriter')
 for AS in target_AS:
 	if method.lower() == 'ranksum':
 		print("Detecting significant events using Wilcoxon rank-sum method...")
-		count_pvalue.Count_pvalue_ranksum(AS, output_dir, s1_namelist, s2_namelist, g1_name, g2_name)
-	elif method.lower() == 'chisquare':
+		count_pvalue.Count_pvalue_replicates(AS, output_dir, s1_namelist, s2_namelist)
+	else:
 		print("Detecting significant events using Chi-squared method...")
 		count_pvalue.Count_pvalue(AS, output_dir, s1_namelist, s2_namelist, g1_name, g2_name)
 	print(AS, "counting p-val Complete")
 
-	df = pd.read_csv(output_dir+AS+"_Output.csv", delimiter = '\t')
+	df = pd.read_csv(os.path.join(output_dir, AS+"_Output.csv"), delimiter = '\t')
+	df.sort_values(by=['P_value'], ascending=True, inplace=True)
 	df.to_excel(writer_out, sheet_name=AS, index = None, header=True)
-	os.remove(output_dir+AS+"_Output.csv")
+	os.remove(os.path.join(output_dir, AS+"_Output.csv"))
 writer_out.save()
-
 
 totalTime = time.time() - startTime
 print("Total AS-Quant time is : ",round((totalTime/60),2), "minutes")

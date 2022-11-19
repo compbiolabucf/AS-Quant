@@ -1,4 +1,4 @@
-chr18	Pcdha11	37184945	37187660	+
+chrom	gene	exonStart	exonEnd	strand
 chr1	Atg16l1	87785875	87786346	+
 chr17	Phf1	26934193	26934535	+
 chr17	Phf1	26936286	26936680	+

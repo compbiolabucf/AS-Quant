@@ -1,4 +1,4 @@
-chr10	Myb	21144968	21145325	-
+chrom	gene	exonStart	exonEnd	strand
 chr17	Tnfrsf12a	23676518	23676623	-
 chr3	Tsc22d2	58428227	58428299	+
 chr3	Tsc22d2	58437316	58437475	+

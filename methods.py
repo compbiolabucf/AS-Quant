@@ -1,15 +1,10 @@
 import csv
-from operator import attrgetter
+from operator import itemgetter
 import pandas as pd
 import time
 import bisect
 from bisect import bisect_left
-import sys
-
-class EXON:
-	def __init__(self):
-		self.st = 0
-		self.en = 0
+import sys, os
 
 class Stack:
 	def __init__(self):
@@ -36,34 +31,23 @@ class Stack:
 		else:
 			return self.items.pop()
 
-
-def InsertIntoOldChromDict(ChromDict, chrom, exListNew, geneName):
-	GeneDict = ChromDict[chrom]
-	if geneName not in GeneDict.keys():
-		GeneDict[geneName] = exListNew
-	else:
-		exList = GeneDict[geneName]
-		exList.extend(exListNew)
-		GeneDict[geneName] = exList
-	return GeneDict
-
-
 def bi_contains(lst, item):
     return bisect_left(lst, item)
 
 def MergeIntervals(inputlist):
 	n = len(inputlist)
-	inputlist.sort(key = attrgetter('st'), reverse = False)
+	inputlist.sort(key = itemgetter(1), reverse = False)
 
 	st = Stack()
 	st.push(inputlist[0])
 
 	for i in range(1,n):
 		stacktop = st.top()
-		if inputlist[i].st <= stacktop.en:
+		if inputlist[i][0] <= stacktop[1]:
 			st.pop()
-			stacktop.en = max(stacktop.en,inputlist[i].en)
-			st.push(stacktop)
+			st_st = stacktop[0]
+			st_en = max(stacktop[1],inputlist[i][1])
+			st.push((st_st, st_en))
 		else:
 			st.push(inputlist[i])
 
@@ -78,28 +62,27 @@ def MergeIntervals(inputlist):
 	return mergedExList
 
 
-
 def CountTotalReadCount(chrom, exList, bam_list, position_row):
 	totalCount = 0
 	for p in range(len(exList)):
-		start = int(exList[p].st)
-		end = int(exList[p].en)
+		start = int(exList[p][0])
+		end = int(exList[p][1])
 
 		pos1 = bi_contains(position_row, start)
 		pos2 = bi_contains(position_row, end)
 
-		if(pos1 < len(bam_list) and pos2 < len(bam_list)):
-			if(int(bam_list[pos2][1]) != end):
+		if(pos1 < len(position_row) and pos2 < len(position_row)):
+			if(int(bam_list[pos2][0]) != end):
 				pos2 = pos2 - 1
 
 			for t in range(pos1, pos2+1):
-				read = int(bam_list[t][2])
+				read = int(bam_list[t][1])
 				totalCount += read
 		
 	return totalCount
 
-def writeResult(chrom, geneID, start, end, newList, bam_list, position_row, RC, mergedExListLength, writer):
-	targetRC = CountTotalReadCount(chrom, newList, bam_list, position_row)
+def writeResult(chrom, gene, start, end, bam_list, position_row, RC, mergedExListLength, writer_list):
+	targetRC = CountTotalReadCount(chrom, [(start, end)], bam_list, position_row)
 	targetLength = end - start + 1
 
 	#### Avoiding divide by zero error ##### 
@@ -113,195 +96,151 @@ def writeResult(chrom, geneID, start, end, newList, bam_list, position_row, RC, 
 	else:
 		averageRCothers = (RC-targetRC)/(mergedExListLength-targetLength)
 
-	writer.writerow([chrom, geneID, start, end, targetRC, targetLength, RC, mergedExListLength, RC-targetRC, mergedExListLength-targetLength,  averageTargetRC, averageRCothers])
+	writer_list.append((chrom, gene, start, end, targetRC, targetLength, RC, mergedExListLength, RC-targetRC, mergedExListLength-targetLength,  averageTargetRC, averageRCothers))
+	
+	return writer_list
 
-def callA3SS(t_row):
-	newList = []
-	e = EXON()
-	strand = t_row[7]
-	if strand == '+':
-		e.st = int(t_row[5])
-		e.en = int(t_row[3])-1
-	else:
-		e.st = int(t_row[4])+1
-		e.en = int(t_row[6])
-	newList.append(e)
-	return e.st, e.en, newList
 
-def callA5SS(t_row):
-	newList = []
-	e = EXON()
-	strand = t_row[7]
-	if strand == '+':
-		e.st = int(t_row[4])+1
-		e.en = int(t_row[6])
-	else:
-		e.st = int(t_row[5])-1
-		e.en = int(t_row[4])
-	newList.append(e)
-	return e.st, e.en, newList
-
-def callMXE(t_row):
-	newList1 = []
-	e1 = EXON()
-	e1.st = int(t_row[3])
-	e1.en = int(t_row[4])
-	newList1.append(e1)
-
-	newList2 = []
-	e2 = EXON()
-	e2.st = int(t_row[5])
-	e2.en = int(t_row[6])
-	newList2.append(e2)
-	return e1.st, e1.en, newList1, e2.st, e2.en, newList2
-
-def callSE_RI(t_row):
-	newList = []
-	e = EXON()
-	e.st = int(t_row[3])
-	e.en = int(t_row[4])
-	newList.append(e)
-	return e.st, e.en, newList
-
-def Generate_Novel(ChromDict, ChromDict_exon, chromosomes, AS, input_dir, species_folder, sample, output_dir):
+def Find_Novel_splicing_events(ChromDict_merged, ChromDict, chromosomes, AS, input_dir, species_folder, sample, output_dir):
 	tt = time.time()
 	AS_flag = []
-	with open(output_dir+sample+"_"+AS+".csv",'w') as f:
-		writer = csv.writer(f, delimiter='\t')
-		writer.writerow(['Chrom', 'Gene Name', 'Exon Start', 'Exon End', 'Target Read Count', 'Target Length', 'Others: Read Count', 'Others: Length', 'Others: Read Count- target RC', 'Others: Length - exon length', 'Average Target Read Count(n)', 'Average Read Count All(N)'])
+	as_df = pd.read_csv(os.path.join(species, AS+'.csv'), delimiter='\t')
+	writer_list = []
+	output_columns = ['chrom', 'geneName', 'splicedExonStart', 'splicedExonEnd', 'splicedExonReadCount(rc)', 'splicedExonLength(sl)', 'othersExonsReadCount(RC)', 'othersExonsLength(L)', 'RC - rc', 'L - sl', 'splicedExonAverageReadCoverage(n)', 'otherExonsAverageReadCoverage(N)']
 
-		for chrom in chromosomes:
-			print("Starting:",chrom)
-			tts = time.time()
-			bam_file_reader= open(input_dir+'/'+sample+'/'+chrom+".txt", "rt")
-			bam_read = csv.reader(bam_file_reader, delimiter="\t")
-			bam_list = list(bam_read)
-			position_row = [int(bam_list[i][1]) for i in range(len(bam_list))]
+	for chrom in chromosomes:
+		print("Starting:",chrom)
+		tts = time.time()
+		GeneDict = ChromDict[chrom]
+		GeneDict_merged = ChromDict_merged[chrom]
+		bam_df = pd.read_csv(os.path.join(input_dir, sample, chrom+".txt"), delimiter='\t')
+		position_row = bam_df.iloc[:, 0].tolist()
+		bam_list = bam_df.values.tolist()
 
-			
-			GeneDict_exon = ChromDict_exon[chrom]
-			GeneDict = ChromDict[chrom]
-			
-			for geneID in GeneDict_exon.keys():
-				exonList = GeneDict_exon[geneID]
-				mergedExList = GeneDict[geneID]
+		for gene in GeneDict.keys():
+			exonList = list(set(GeneDict[gene.upper()]))
+			mergedExList = GeneDict_merged[gene.upper()]
 
-				mergedExListLength = 0
-				for p in range(len(mergedExList)):
-					mergedExListLength += mergedExList[p].en - mergedExList[p].st + 1
-				RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
+			mergedExListLength = 0
+			for p in range(len(mergedExList)):
+				mergedExListLength += mergedExList[p][1] - mergedExList[p][0] + 1
+			RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
 
-				for ex in range(len(exonList)):
-					start = int(exonList[ex].st)
-					end = int(exonList[ex].en)
+			for ex in range(len(exonList)):
+				start, end = int(exonList[ex][0]), int(exonList[ex][1])
 
-					newList = []
-					e = EXON()
-					e.st = start
-					e.en = end
-					newList.append(e)
+				if (chrom, gene, start, end) not in AS_flag:
+					writer_list = writeResult(chrom, gene, start, end, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, start, end))
 
-					if (chrom, geneID, start, end) not in AS_flag:
-						writeResult(chrom, geneID, start, end, newList, bam_list, position_row, RC, mergedExListLength, writer)
-						AS_flag.append((chrom, geneID, start, end))
+	df_out = pd.DataFrame(writer_list, columns = output_columns)
+	df_out.to_csv(os.path.join(output_dir, sample+"_"+AS+".csv"), sep='\t', index=False)
 
-			print("Time for chrom: ", chrom, "is: ", time.time() - tts)
-
-		f.close()
 	print("Elapsed time: ",round(((time.time()-tt)/60),2), "minutes")
 
 
-def Generate(ChromDict, chromosomes, AS, input_dir, species_folder, sample, output_dir):
+def Find_splicing_events(ChromDict_merged, chromosomes, AS, input_dir, species, sample, output_dir):
 	tt = time.time()
 	AS_flag = []
-	target_file_reader= open(species_folder+AS+'.csv', "rt")
-	target_read = csv.reader(target_file_reader, delimiter="\t")
-	target_list = list(target_read)
-	df = pd.DataFrame(target_list)
+	as_df = pd.read_csv(os.path.join(species, AS+'.csv'), delimiter='\t')
 	
-	with open(output_dir+sample+"_"+AS+".csv",'w') as f:
-		writer = csv.writer(f, delimiter='\t')
-		writer.writerow(['Chrom', 'Gene Name', 'Exon Start', 'Exon End', 'Target Read Count', 'Target Length', 'Others: Read Count', 'Others: Length', 'Others: Read Count- target RC', 'Others: Length - exon length', 'Average Target Read Count(n)', 'Average Read Count All(N)'])
+	writer_list = []
+	output_columns = ['chrom', 'geneName', 'splicedExonStart', 'splicedExonEnd', 'splicedExonReadCount(rc)', 'splicedExonLength(sl)', 'othersExonsReadCount(RC)', 'othersExonsLength(L)', 'RC - rc', 'L - sl', 'splicedExonAverageReadCoverage(n)', 'otherExonsAverageReadCoverage(N)']
 
-		for chrom in chromosomes:
-			print("Starting:",chrom)
-			tts = time.time()
-			bam_file_reader= open(input_dir+'/'+sample+'/'+chrom+".txt", "rt")
-			bam_read = csv.reader(bam_file_reader, delimiter="\t")
-			bam_list = list(bam_read)
+	for chrom in chromosomes:
+		print("Starting:",chrom)
+		tts = time.time()
+		GeneDict = ChromDict_merged[chrom]
+		bam_df = pd.read_csv(os.path.join(input_dir, sample, chrom+".txt"), delimiter='\t')
+		position_row = bam_df.iloc[:, 0].tolist()
+		bam_list = bam_df.values.tolist()
+
+		as_chr_rows = as_df[as_df['chrom']==chrom]
+		for ind1, t_row in as_chr_rows.iterrows():
+			gene = t_row['gene'].strip().upper()
+			mergedExList = GeneDict[gene]
+
+			mergedExListLength = 0
+			for p in range(len(mergedExList)):
+				mergedExListLength += mergedExList[p][1] - mergedExList[p][0] + 1
+
+			RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
+
+			if AS in ['SE', 'RI']:
+				exonStart, exonEnd = t_row['exonStart'], t_row['exonEnd']
+				if (chrom, gene, exonStart, exonEnd) not in AS_flag:
+					writer_list = writeResult(chrom, gene, exonStart, exonEnd, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, exonStart, exonEnd))
+
+			elif AS == 'MXE':
+				exon1Start, exon1End = t_row['exon1Start'], t_row['exon1End']
+				exon2Start, exon2End = t_row['exon2Start'], t_row['exon2End']
+				if (chrom, gene, exon1Start, exon1End) not in AS_flag:
+					writer_list = writeResult(chrom, gene, exon1Start, exon1End, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, exon1Start, exon1End))
+
+				if (chrom, gene, exon2Start, exon2End) not in AS_flag:
+					writer_list = writeResult(chrom, gene, exon2Start, exon2End, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, exon2Start, exon2End))
 			
-			position_row = [int(bam_list[i][1]) for i in range(len(bam_list))]
-			target_tt = df.loc[df[0]==chrom]
-			
-			for t_row in target_tt.itertuples():
-				geneID = t_row[2].strip().upper()
-				GeneDict = ChromDict[chrom]
-				mergedExList = GeneDict[geneID]
-
-				mergedExListLength = 0
-				for p in range(len(mergedExList)):
-					mergedExListLength += mergedExList[p].en - mergedExList[p].st + 1
-
-				RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
-				if(AS == 'SE' or AS == 'RI'):
-					start, end, newList = callSE_RI(t_row)
-					if (chrom, geneID, start, end) not in AS_flag:
-						writeResult(chrom, geneID, start, end, newList, bam_list, position_row, RC, mergedExListLength, writer)
-						AS_flag.append((chrom, geneID, start, end))
-
-				elif(AS == 'MXE'):
-					start1, end1, newList1, start2, end2, newList2 = callMXE(t_row)
-					if (chrom, geneID, start1, end1) not in AS_flag:
-						writeResult(chrom, geneID, start1, end1, newList1, bam_list, position_row, RC, mergedExListLength, writer)
-						AS_flag.append((chrom, geneID, start1, end1))
-					if (chrom, geneID, start2, end2) not in AS_flag:
-						writeResult(chrom, geneID, start2, end2, newList2, bam_list, position_row, RC, mergedExListLength, writer)
-						AS_flag.append((chrom, geneID, start2, end2))
-				
-				elif(AS == 'A5SS'):
-					start, end, newList = callA5SS(t_row)
-					if (chrom, geneID, start, end) not in AS_flag:
-						writeResult(chrom, geneID, start, end, newList, bam_list, position_row, RC, mergedExListLength, writer)
-						AS_flag.append((chrom, geneID, start, end))
-
-				elif(AS == 'A3SS'):
-					start, end, newList = callA3SS(t_row)
-					if (chrom, geneID, start, end) not in AS_flag:
-						writeResult(chrom, geneID, start, end, newList, bam_list, position_row, RC, mergedExListLength, writer)
-						AS_flag.append((chrom, geneID, start, end))
-			print("Time for chrom: ", chrom, "is: ", time.time() - tts)
-
-		f.close()
-	print("Elapsed time: ",round(((time.time()-tt)/60),2), "minutes")
-
-
-def MakeFullDictionary(ann_list, chromosomes):
-	ChromDict = {}
-	
-	for a_row in ann_list:
-		chrom = a_row[2]
-		if chrom in chromosomes:
-			geneName = a_row[1].strip().upper()
-			exonCount = int(a_row[8])
-			exonStartList = a_row[9].split(',')
-			exonEndList = a_row[10].split(',')
-
-			exList = []
-			for i in range(exonCount):
-				exonStart = int(exonStartList[i])
-				exonEnd = int(exonEndList[i])
-				newExon = EXON()
-				newExon.st = exonStart
-				newExon.en = exonEnd
-				exList.append(newExon)
-			
-			if chrom not in ChromDict.keys():
-				GeneDict = {}
-				GeneDict[geneName] = exList
 			else:
-				GeneDict = InsertIntoOldChromDict(ChromDict, chrom, exList, geneName)
+				longExonStart, longExonEnd, shortExonStart, shortExonEnd, strand = t_row['longExonStart'], t_row['longExonEnd'], t_row['shortExonStart'], t_row['shortExonEnd'], t_row['strand']
+				start, end = 0, 0
+				if AS == 'A5SS':
+					if strand == '+':
+						start, end = longExonEnd+1, shortExonEnd
+					else:
+						start, end = shortExonStart, longExonStart-1
 
-			ChromDict[chrom] = GeneDict
+				elif AS == 'A3SS':
+					if strand == '+':
+						start, end = shortExonStart, longExonStart-1
+					else:
+						start, end = longExonEnd+1, shortExonEnd
 
+				if (chrom, gene, start, end) not in AS_flag:
+					writer_list = writeResult(chrom, gene, start, end, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, start, end))
+
+	df_out = pd.DataFrame(writer_list, columns = output_columns)
+	df_out.to_csv(os.path.join(output_dir, sample+"_"+AS+".csv"), sep='\t', index=False)
+
+	print("Elapsed time: ",round(((time.time()-tt)/60),2), "minutes")
+
+
+def MakeFullDictionary(ann_df, chromosomes):
+	ChromDict = {}
+	for chrom in chromosomes:
+		GeneDict = {}
+		chr_rows = ann_df[ann_df['chrom']==chrom]
+		gene_list = list(set(chr_rows['gene']))
+		for gene in gene_list:
+			gene_rows = chr_rows[chr_rows['gene']==gene]
+			exList = []
+			for index, row in gene_rows.iterrows():
+				exonCount = row['exonCount']
+				exonStarts = list(filter(None, row['exonStarts'].split(',')))
+				exonEnds = list(filter(None, row['exonEnds'].split(',')))
+				for i in range(exonCount):
+					st, en = int(exonStarts[i]), int(exonEnds[i])
+					if (st, en) not in exList:
+						exList.append((st, en))
+
+			GeneDict[gene.strip().upper()] = exList
+
+		ChromDict[chrom] = GeneDict
 
 	return ChromDict
+
+def merge_ChromDict(ChromDict, chromosomes):
+	ChromDict_merged = {}
+	for chrom in chromosomes:
+		GeneDict_merged = {}
+		GeneDict = ChromDict[chrom]
+		for gene in GeneDict.keys():
+			exonList = GeneDict[gene.upper()]
+			mergedExonList = MergeIntervals(exonList)
+			GeneDict_merged[gene.upper()] = mergedExonList
+		ChromDict_merged[chrom] = GeneDict_merged
+
+	return ChromDict_merged
