@@ -113,28 +113,25 @@ def Find_Novel_splicing_events(ChromDict_merged, ChromDict, chromosomes, AS, inp
 		tts = time.time()
 		GeneDict = ChromDict[chrom]
 		GeneDict_merged = ChromDict_merged[chrom]
-		txtfile = os.path.join(input_dir, sample, chrom+".txt")
-		if os.path.getsize(txtfile) > 0:
-			bam_df = pd.read_csv(txtfile, delimiter='\t')
-			
-			position_row = bam_df.iloc[:, 0].tolist()
-			bam_list = bam_df.values.tolist()
+		bam_df = pd.read_csv(os.path.join(input_dir, sample, chrom+".txt"), delimiter='\t')
+		position_row = bam_df.iloc[:, 0].tolist()
+		bam_list = bam_df.values.tolist()
 
-			for gene in GeneDict.keys():
-				exonList = list(set(GeneDict[gene.upper()]))
-				mergedExList = GeneDict_merged[gene.upper()]
+		for gene in GeneDict.keys():
+			exonList = list(set(GeneDict[gene.upper()]))
+			mergedExList = GeneDict_merged[gene.upper()]
 
-				mergedExListLength = 0
-				for p in range(len(mergedExList)):
-					mergedExListLength += mergedExList[p][1] - mergedExList[p][0] + 1
-				RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
+			mergedExListLength = 0
+			for p in range(len(mergedExList)):
+				mergedExListLength += mergedExList[p][1] - mergedExList[p][0] + 1
+			RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
 
-				for ex in range(len(exonList)):
-					start, end = int(exonList[ex][0]), int(exonList[ex][1])
+			for ex in range(len(exonList)):
+				start, end = int(exonList[ex][0]), int(exonList[ex][1])
 
-					if (chrom, gene, start, end) not in AS_flag:
-						writer_list = writeResult(chrom, gene, start, end, bam_list, position_row, RC, mergedExListLength, writer_list)
-						AS_flag.append((chrom, gene, start, end))
+				if (chrom, gene, start, end) not in AS_flag:
+					writer_list = writeResult(chrom, gene, start, end, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, start, end))
 
 	df_out = pd.DataFrame(writer_list, columns = output_columns)
 	df_out.to_csv(os.path.join(output_dir, sample+"_"+AS+".csv"), sep='\t', index=False)
@@ -154,58 +151,56 @@ def Find_splicing_events(ChromDict_merged, chromosomes, AS, input_dir, species, 
 		print("Starting:",chrom)
 		tts = time.time()
 		GeneDict = ChromDict_merged[chrom]
-		txtfile = os.path.join(input_dir, sample, chrom+".txt")
-		if os.path.getsize(txtfile) > 0:
-			bam_df = pd.read_csv(txtfile, delimiter='\t')
-			position_row = bam_df.iloc[:, 0].tolist()
-			bam_list = bam_df.values.tolist()
+		bam_df = pd.read_csv(os.path.join(input_dir, sample, chrom+".txt"), delimiter='\t')
+		position_row = bam_df.iloc[:, 0].tolist()
+		bam_list = bam_df.values.tolist()
 
-			as_chr_rows = as_df[as_df['chrom']==chrom]
-			for ind1, t_row in as_chr_rows.iterrows():
-				gene = t_row['gene'].strip().upper()
-				mergedExList = GeneDict[gene]
+		as_chr_rows = as_df[as_df['chrom']==chrom]
+		for ind1, t_row in as_chr_rows.iterrows():
+			gene = t_row['gene'].strip().upper()
+			mergedExList = GeneDict[gene]
 
-				mergedExListLength = 0
-				for p in range(len(mergedExList)):
-					mergedExListLength += mergedExList[p][1] - mergedExList[p][0] + 1
+			mergedExListLength = 0
+			for p in range(len(mergedExList)):
+				mergedExListLength += mergedExList[p][1] - mergedExList[p][0] + 1
 
-				RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
+			RC = CountTotalReadCount(chrom, mergedExList, bam_list, position_row)
 
-				if AS in ['SE', 'RI']:
-					exonStart, exonEnd = t_row['exonStart'], t_row['exonEnd']
-					if (chrom, gene, exonStart, exonEnd) not in AS_flag:
-						writer_list = writeResult(chrom, gene, exonStart, exonEnd, bam_list, position_row, RC, mergedExListLength, writer_list)
-						AS_flag.append((chrom, gene, exonStart, exonEnd))
+			if AS in ['SE', 'RI']:
+				exonStart, exonEnd = t_row['exonStart'], t_row['exonEnd']
+				if (chrom, gene, exonStart, exonEnd) not in AS_flag:
+					writer_list = writeResult(chrom, gene, exonStart, exonEnd, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, exonStart, exonEnd))
 
-				elif AS == 'MXE':
-					exon1Start, exon1End = t_row['exon1Start'], t_row['exon1End']
-					exon2Start, exon2End = t_row['exon2Start'], t_row['exon2End']
-					if (chrom, gene, exon1Start, exon1End) not in AS_flag:
-						writer_list = writeResult(chrom, gene, exon1Start, exon1End, bam_list, position_row, RC, mergedExListLength, writer_list)
-						AS_flag.append((chrom, gene, exon1Start, exon1End))
+			elif AS == 'MXE':
+				exon1Start, exon1End = t_row['exon1Start'], t_row['exon1End']
+				exon2Start, exon2End = t_row['exon2Start'], t_row['exon2End']
+				if (chrom, gene, exon1Start, exon1End) not in AS_flag:
+					writer_list = writeResult(chrom, gene, exon1Start, exon1End, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, exon1Start, exon1End))
 
-					if (chrom, gene, exon2Start, exon2End) not in AS_flag:
-						writer_list = writeResult(chrom, gene, exon2Start, exon2End, bam_list, position_row, RC, mergedExListLength, writer_list)
-						AS_flag.append((chrom, gene, exon2Start, exon2End))
-				
-				else:
-					longExonStart, longExonEnd, shortExonStart, shortExonEnd, strand = t_row['longExonStart'], t_row['longExonEnd'], t_row['shortExonStart'], t_row['shortExonEnd'], t_row['strand']
-					start, end = 0, 0
-					if AS == 'A5SS':
-						if strand == '+':
-							start, end = longExonEnd+1, shortExonEnd
-						else:
-							start, end = shortExonStart, longExonStart-1
+				if (chrom, gene, exon2Start, exon2End) not in AS_flag:
+					writer_list = writeResult(chrom, gene, exon2Start, exon2End, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, exon2Start, exon2End))
+			
+			else:
+				longExonStart, longExonEnd, shortExonStart, shortExonEnd, strand = t_row['longExonStart'], t_row['longExonEnd'], t_row['shortExonStart'], t_row['shortExonEnd'], t_row['strand']
+				start, end = 0, 0
+				if AS == 'A5SS':
+					if strand == '+':
+						start, end = longExonEnd+1, shortExonEnd
+					else:
+						start, end = shortExonStart, longExonStart-1
 
-					elif AS == 'A3SS':
-						if strand == '+':
-							start, end = shortExonStart, longExonStart-1
-						else:
-							start, end = longExonEnd+1, shortExonEnd
+				elif AS == 'A3SS':
+					if strand == '+':
+						start, end = shortExonStart, longExonStart-1
+					else:
+						start, end = longExonEnd+1, shortExonEnd
 
-					if (chrom, gene, start, end) not in AS_flag:
-						writer_list = writeResult(chrom, gene, start, end, bam_list, position_row, RC, mergedExListLength, writer_list)
-						AS_flag.append((chrom, gene, start, end))
+				if (chrom, gene, start, end) not in AS_flag:
+					writer_list = writeResult(chrom, gene, start, end, bam_list, position_row, RC, mergedExListLength, writer_list)
+					AS_flag.append((chrom, gene, start, end))
 
 	df_out = pd.DataFrame(writer_list, columns = output_columns)
 	df_out.to_csv(os.path.join(output_dir, sample+"_"+AS+".csv"), sep='\t', index=False)
