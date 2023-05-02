@@ -70,7 +70,7 @@ current = os.getcwd()
 os.chdir(input1_dir)
 for file1 in glob.glob("*.bam"):
     preprocess.SamtoText(input1_dir, current, file1, chromosomes)
-os.chdir(input2_dir)
+os.chdir(os.path.join(current,input2_dir))
 for file2 in glob.glob("*.bam"):
     preprocess.SamtoText(input2_dir, current, file2, chromosomes)
 os.chdir(current)
